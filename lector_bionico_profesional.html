@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="es" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BionicReader Pro | Plataforma de Lectura Avanzada</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Merriweather', 'serif'],
+                        lexend: ['Lexend', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        },
+                        cream: {
+                            50: '#fdfbf7',
+                            100: '#f7f4eb',
+                            200: '#efe9d9',
+                            900: '#2c2514'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        .light ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        #bionic-output-pane .bionic-bold,
+        #contrast-preview .preview-bold {
+            font-weight: 900 !important;
+            letter-spacing: -0.02em;
+        }
+        #bionic-output-pane .bionic-light,
+        #contrast-preview .preview-light {
+            font-weight: 400 !important;
+        }
+        .theme-cream { background-color: #fdfbf7; color: #2c2514; }
+        .theme-cream .reader-pane { background-color: #f7f4eb; color: #2c2514; border-color: #efe9d9; }
+        .theme-cream .text-muted { color: #706040; }
+        #app-modal { transition: opacity 0.2s ease; }
+        #app-modal.hidden { pointer-events: none; }
+        #app-modal-backdrop { transition: opacity 0.2s ease; }
+        #app-modal-panel { transition: transform 0.25s ease, opacity 0.25s ease; }
+        #app-modal.hidden #app-modal-panel { transform: scale(0.95); opacity: 0; }
+        #contrast-preview .preview-bold { font-weight: 900; }
+        #contrast-preview .preview-light { font-weight: 400; }
+        #drop-zone.drag-over { border-color: #3b82f6; background-color: rgba(37, 99, 235, 0.12); }
+        @keyframes pulse-ring { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .upload-pulse { animation: pulse-ring 1.5s ease-in-out infinite; }
+        #progress-bar { transition: width 0.35s ease; }
+    </style>
+</head>
+<body class="font-sans antialiased bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-200 overflow-hidden h-screen flex">
+
+    <aside id="sidebar" class="w-80 bg-slate-900 text-slate-100 flex flex-col h-full z-20 transition-all duration-300 transform md:translate-x-0 relative shadow-xl border-r border-slate-800">
+        <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-brand-600 p-2 rounded-lg text-white">
+                    <i class="fa-solid fa-bolt text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-tight">BionicReader<span class="text-brand-500 font-black">PRO</span></h1>
+                    <p class="text-xs text-slate-400">Lectura de Alto Rendimiento</p>
+                </div>
+            </div>
+            <button id="close-sidebar-btn" class="md:hidden text-slate-400 hover:text-white p-1">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+        </div>
+
+        <div class="flex border-b border-slate-800 text-sm">
+            <button id="tab-upload" class="flex-1 py-3 text-center border-b-2 border-brand-500 text-white font-medium focus:outline-none">
+                <i class="fa-solid fa-file-import mr-2"></i>Cargar
+            </button>
+            <button id="tab-config" class="flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium focus:outline-none">
+                <i class="fa-solid fa-sliders mr-2"></i>Ajustes
+            </button>
+            <button id="tab-library" class="flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium focus:outline-none">
+                <i class="fa-solid fa-bookmark mr-2"></i>Biblioteca
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-5 space-y-6">
+
+            <div id="panel-upload" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Subir Documento</label>
+                    <div id="drop-zone" class="border-2 border-dashed border-slate-700 hover:border-brand-500 rounded-xl p-4 transition-colors group cursor-pointer relative bg-slate-800/50 text-center">
+                        <input type="file" id="file-picker" accept="*/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                        <div id="drop-zone-idle">
+                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-500 group-hover:text-brand-500 mb-2 transition-colors"></i>
+                            <p class="text-sm font-medium text-slate-300">Arrastra o selecciona cualquier archivo</p>
+                            <p class="text-xs text-slate-500 mt-1">PDF, Word, TXT, imágenes, código, HTML y más</p>
+                        </div>
+                        <div id="drop-zone-file" class="hidden">
+                            <i id="file-type-icon" class="fa-solid fa-file text-3xl text-brand-400 mb-2"></i>
+                            <p id="selected-file-name" class="text-sm font-medium text-slate-200 truncate px-2"></p>
+                            <p id="selected-file-size" class="text-xs text-slate-500 mt-1"></p>
+                        </div>
+                    </div>
+
+                    <!-- Upload / Process status card -->
+                    <div id="upload-status-card" class="hidden mt-3 bg-slate-800/80 border border-slate-700 rounded-xl p-3 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2 min-w-0">
+                                <i id="upload-status-icon" class="fa-solid fa-circle-notch fa-spin text-brand-400"></i>
+                                <span id="upload-status-label" class="text-xs font-semibold text-slate-200 truncate">Subiendo archivo...</span>
+                            </div>
+                            <span id="upload-status-percent" class="text-xs font-mono text-brand-400 font-bold shrink-0">0%</span>
+                        </div>
+                        <div class="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                            <div id="progress-bar" class="h-full bg-brand-500 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <p id="upload-status-detail" class="text-[11px] text-slate-500">Preparando...</p>
+                    </div>
+
+                    <button id="process-file-btn" class="hidden w-full mt-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>Procesar Archivo Seleccionado</span>
+                    </button>
+                </div>
+
+                <div class="relative flex py-2 items-center text-xs uppercase tracking-wider text-slate-500">
+                    <div class="flex-grow border-t border-slate-800"></div>
+                    <span class="flex-shrink mx-3">O ingresa texto manual</span>
+                    <div class="flex-grow border-t border-slate-800"></div>
+                </div>
+
+                <div>
+                    <textarea id="manual-text-input" rows="8" placeholder="Pega tu texto o artículo aquí..." class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-none"></textarea>
+                </div>
+
+                <button id="process-btn" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-brand-900/30 transition-all flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Procesar e Iniciar Lectura</span>
+                </button>
+            </div>
+
+            <div id="panel-config" class="hidden space-y-5">
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="param-fixation" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Fijación de Mirada (Negrita)</label>
+                        <span id="val-fixation" class="text-xs font-mono bg-slate-800 px-2 py-0.5 rounded text-brand-400 font-bold">55%</span>
+                    </div>
+                    <input type="range" id="param-fixation" min="30" max="90" step="5" value="55" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                    <p class="text-[11px] text-slate-500 mt-1">Determina qué porcentaje del inicio de cada palabra se resalta.</p>
+                </div>
+
+                <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">Contraste Biónico</label>
+                        <span class="text-[10px] text-slate-500">Vista previa abajo</span>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="param-bold-intensity" class="text-xs text-slate-300">Letras destacadas (oscuras)</label>
+                            <span id="val-bold-intensity" class="text-xs font-mono bg-slate-800 px-2 py-0.5 rounded text-brand-400 font-bold">100%</span>
+                        </div>
+                        <input type="range" id="param-bold-intensity" min="0" max="100" step="1" value="100" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                        <p class="text-[11px] text-slate-500 mt-1">Más alto = negro más intenso y marcado.</p>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="param-light-clarity" class="text-xs text-slate-300">Letras suaves (claras)</label>
+                            <span id="val-light-clarity" class="text-xs font-mono bg-slate-800 px-2 py-0.5 rounded text-brand-400 font-bold">95%</span>
+                        </div>
+                        <input type="range" id="param-light-clarity" min="0" max="100" step="1" value="95" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                        <p class="text-[11px] text-slate-500 mt-1">Más alto = gris más claro y sutil.</p>
+                    </div>
+
+                    <div id="contrast-preview" class="bg-slate-900/80 rounded-lg p-3 text-sm text-center leading-relaxed">
+                        <span class="preview-bold">Lec</span><span class="preview-light">tura</span>
+                        <span class="preview-bold"> bió</span><span class="preview-light">nica</span>
+                        <span class="preview-bold"> rá</span><span class="preview-light">pida</span>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="param-font-size" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tamaño de Letra</label>
+                        <span id="val-font-size" class="text-xs font-mono bg-slate-800 px-2 py-0.5 rounded text-brand-400 font-bold">20px</span>
+                    </div>
+                    <input type="range" id="param-font-size" min="14" max="36" step="1" value="20" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="param-line-height" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Interlineado</label>
+                        <span id="val-line-height" class="text-xs font-mono bg-slate-800 px-2 py-0.5 rounded text-brand-400 font-bold">1.8</span>
+                    </div>
+                    <input type="range" id="param-line-height" min="1.4" max="2.6" step="0.1" value="1.8" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="param-word-spacing" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Espaciado de Palabras</label>
+                        <span id="val-word-spacing" class="text-xs font-mono bg-slate-800 px-2 py-0.5 rounded text-brand-400 font-bold">0px</span>
+                    </div>
+                    <input type="range" id="param-word-spacing" min="0" max="12" step="1" value="0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Familia Tipográfica</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="font-sans" class="py-2 bg-brand-600 text-white rounded-lg text-sm font-medium border border-transparent">Sans</button>
+                        <button id="font-serif" class="py-2 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded-lg text-sm font-serif border border-transparent">Serif</button>
+                        <button id="font-lexend" class="py-2 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded-lg text-sm font-lexend border border-transparent">Lexend</button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Paleta de Fondo</label>
+                    <div class="grid grid-cols-3 gap-2" id="theme-selectors">
+                        <button data-theme="light" class="py-2 bg-white text-slate-900 border border-slate-300 rounded-lg text-xs font-medium shadow-sm">Claro</button>
+                        <button data-theme="cream" class="py-2 bg-[#f7f4eb] text-[#2c2514] border border-[#efe9d9] rounded-lg text-xs font-medium shadow-sm">Crema</button>
+                        <button data-theme="dark" class="py-2 bg-slate-950 text-slate-100 border border-slate-800 rounded-lg text-xs font-medium shadow-sm">Oscuro</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="panel-library" class="hidden space-y-4">
+                <div class="flex justify-between items-center">
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Documentos en Caché</label>
+                    <button id="clear-cache-btn" class="text-xs text-red-400 hover:text-red-300"><i class="fa-solid fa-trash-can mr-1"></i>Limpiar</button>
+                </div>
+                <div id="library-list" class="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                    <p class="text-xs text-slate-500 text-center py-4">No tienes documentos guardados localmente.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="p-4 border-t border-slate-800 bg-slate-950/40 text-center text-[11px] text-slate-500">
+            <span class="font-medium text-slate-400">Estado Local:</span> <span id="local-sync-status">Sincronizado en Caché</span>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-full overflow-hidden relative">
+
+        <header class="h-16 border-b bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 px-6 flex items-center justify-between z-10 shrink-0 shadow-sm transition-colors">
+            <div class="flex items-center space-x-4">
+                <button id="toggle-sidebar-btn" class="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                <div>
+                    <h2 id="current-doc-title" class="font-semibold text-slate-800 dark:text-slate-100 truncate max-w-xs md:max-w-md">Guía de Inicio Rápido</h2>
+                    <p id="current-doc-meta" class="text-xs text-slate-400">Listo para leer • <span id="word-count">0</span> palabras</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <button id="save-current-btn" class="px-3 py-1.5 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-xs font-medium transition-all flex items-center space-x-1" title="Guardar documento actual en caché local">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span class="hidden sm:inline">Guardar</span>
+                </button>
+                <button id="zen-mode-btn" class="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Modo Enfoque (Zen)">
+                    <i class="fa-solid fa-expand"></i>
+                </button>
+            </div>
+        </header>
+
+        <div id="loading-overlay" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md z-50 flex flex-col items-center justify-center space-y-5 hidden transition-opacity duration-300">
+            <div class="relative w-20 h-20">
+                <div class="absolute inset-0 border-4 border-slate-700 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-t-brand-500 rounded-full animate-spin"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <i class="fa-solid fa-bolt text-brand-400 text-xl"></i>
+                </div>
+            </div>
+            <div class="text-center w-full max-w-sm px-6">
+                <h3 class="text-white font-semibold text-lg" id="loading-status-title">Procesando archivo</h3>
+                <p class="text-slate-400 text-sm mt-1" id="loading-status-desc">Extrayendo texto...</p>
+                <div class="mt-4 h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="overlay-progress-bar" class="h-full bg-brand-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <p id="overlay-progress-text" class="text-xs text-brand-400 font-mono mt-2">0%</p>
+            </div>
+        </div>
+
+        <div id="reader-scroll-container" class="flex-1 overflow-y-auto px-6 py-12 md:py-16 transition-colors duration-200">
+            <div class="max-w-3xl mx-auto w-full">
+                <div id="bionic-output-pane" class="bionic-text font-sans text-justify leading-relaxed break-words outline-none select-text selection:bg-brand-200 dark:selection:bg-brand-900 selection:text-brand-900 dark:selection:text-brand-100"></div>
+            </div>
+        </div>
+
+        <footer class="h-12 border-t border-slate-200 bg-white px-6 flex items-center justify-between text-xs text-slate-400 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-500 transition-colors shrink-0">
+            <div>
+                Progreso estimado: <span id="reading-progress" class="font-medium text-slate-600 dark:text-slate-300">0%</span>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span>Velocidad promedio: ~250 ppm</span>
+                <span id="scroll-to-top" class="cursor-pointer hover:text-brand-500 transition-colors"><i class="fa-solid fa-arrow-up-long mr-1"></i>Subir</span>
+            </div>
+        </footer>
+    </main>
+
+    <!-- Modal global (reemplaza alert / confirm nativos) -->
+    <div id="app-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div id="app-modal-backdrop" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"></div>
+        <div id="app-modal-panel" class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div id="modal-icon-wrap" class="px-6 pt-6 flex justify-center">
+                <div id="modal-icon-circle" class="w-14 h-14 rounded-full flex items-center justify-center bg-brand-100 dark:bg-brand-900/40">
+                    <i id="modal-icon" class="fa-solid fa-circle-info text-2xl text-brand-600"></i>
+                </div>
+            </div>
+            <div class="px-6 pt-4 pb-2 text-center">
+                <h3 id="modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-50">Título</h3>
+                <p id="modal-message" class="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">Mensaje</p>
+            </div>
+            <div id="modal-actions" class="px-6 py-5 flex gap-3 justify-center">
+                <button id="modal-cancel-btn" class="hidden flex-1 max-w-[140px] py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-medium text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    Cancelar
+                </button>
+                <button id="modal-confirm-btn" class="flex-1 max-w-[180px] py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm transition-colors shadow-lg shadow-brand-900/20">
+                    Aceptar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        const TEXT_EXTENSIONS = new Set([
+            'txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'htm', 'css', 'js', 'ts',
+            'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'h', 'cs', 'php', 'rb', 'go', 'rs',
+            'sql', 'yaml', 'yml', 'ini', 'log', 'rtf', 'tex', 'srt', 'vtt'
+        ]);
+
+        const AppState = {
+            currentText: "",
+            currentTitle: "Texto sin título",
+            fixationRatio: 0.55,
+            boldIntensity: 100,
+            lightClarity: 95,
+            fontSize: 20,
+            lineHeight: 1.8,
+            wordSpacing: 0,
+            fontFamily: "sans",
+            theme: "light",
+            library: [],
+            pendingFile: null,
+            isProcessing: false
+        };
+
+        const sidebar = document.getElementById('sidebar');
+        const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
+        const closeSidebarBtn = document.getElementById('close-sidebar-btn');
+        const zenModeBtn = document.getElementById('zen-mode-btn');
+        const tabUpload = document.getElementById('tab-upload');
+        const tabConfig = document.getElementById('tab-config');
+        const tabLibrary = document.getElementById('tab-library');
+        const panelUpload = document.getElementById('panel-upload');
+        const panelConfig = document.getElementById('panel-config');
+        const panelLibrary = document.getElementById('panel-library');
+        const dropZone = document.getElementById('drop-zone');
+        const dropZoneIdle = document.getElementById('drop-zone-idle');
+        const dropZoneFile = document.getElementById('drop-zone-file');
+        const filePicker = document.getElementById('file-picker');
+        const selectedFileName = document.getElementById('selected-file-name');
+        const selectedFileSize = document.getElementById('selected-file-size');
+        const fileTypeIcon = document.getElementById('file-type-icon');
+        const uploadStatusCard = document.getElementById('upload-status-card');
+        const uploadStatusLabel = document.getElementById('upload-status-label');
+        const uploadStatusDetail = document.getElementById('upload-status-detail');
+        const uploadStatusPercent = document.getElementById('upload-status-percent');
+        const uploadStatusIcon = document.getElementById('upload-status-icon');
+        const progressBar = document.getElementById('progress-bar');
+        const processFileBtn = document.getElementById('process-file-btn');
+        const manualTextInput = document.getElementById('manual-text-input');
+        const processBtn = document.getElementById('process-btn');
+        const paramFixation = document.getElementById('param-fixation');
+        const paramBoldIntensity = document.getElementById('param-bold-intensity');
+        const paramLightClarity = document.getElementById('param-light-clarity');
+        const paramFontSize = document.getElementById('param-font-size');
+        const paramLineHeight = document.getElementById('param-line-height');
+        const paramWordSpacing = document.getElementById('param-word-spacing');
+        const valFixation = document.getElementById('val-fixation');
+        const valBoldIntensity = document.getElementById('val-bold-intensity');
+        const valLightClarity = document.getElementById('val-light-clarity');
+        const valFontSize = document.getElementById('val-font-size');
+        const valLineHeight = document.getElementById('val-line-height');
+        const valWordSpacing = document.getElementById('val-word-spacing');
+        const fontSans = document.getElementById('font-sans');
+        const fontSerif = document.getElementById('font-serif');
+        const fontLexend = document.getElementById('font-lexend');
+        const bionicOutputPane = document.getElementById('bionic-output-pane');
+        const readerScrollContainer = document.getElementById('reader-scroll-container');
+        const currentDocTitle = document.getElementById('current-doc-title');
+        const wordCountEl = document.getElementById('word-count');
+        const readingProgressEl = document.getElementById('reading-progress');
+        const saveCurrentBtn = document.getElementById('save-current-btn');
+        const libraryList = document.getElementById('library-list');
+        const clearCacheBtn = document.getElementById('clear-cache-btn');
+        const localSyncStatus = document.getElementById('local-sync-status');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingStatusTitle = document.getElementById('loading-status-title');
+        const loadingStatusDesc = document.getElementById('loading-status-desc');
+        const overlayProgressBar = document.getElementById('overlay-progress-bar');
+        const overlayProgressText = document.getElementById('overlay-progress-text');
+        const contrastPreview = document.getElementById('contrast-preview');
+        const appModal = document.getElementById('app-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalIcon = document.getElementById('modal-icon');
+        const modalIconCircle = document.getElementById('modal-icon-circle');
+        const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        const modalBackdrop = document.getElementById('app-modal-backdrop');
+
+        const SAMPLE_TEXT = `La lectura biónica marca en negrita las primeras letras de algunas palabras para guiar la mirada. El ojo encuentra un punto de apoyo. El cerebro completa el resto. Es casi insultantemente simple.\nY quizá funciona precisamente por eso: porque no intenta corregir la atención, solo le da una forma más fácil de entrar.\nPara algunos cerebros con TDAH, leer así puede sentirse menos denso. Menos bloque. Menos pared.\nUna idea bastante obvia, por cierto. Como muchas cosas obvias, llegó tarde. Prueba subiendo tus propios archivos PDF, Word o imágenes usando el panel de control.`;
+
+        let modalResolve = null;
+
+        const MODAL_STYLES = {
+            info:    { icon: 'fa-circle-info',      circle: 'bg-brand-100 dark:bg-brand-900/40',  iconColor: 'text-brand-600',  btn: 'bg-brand-600 hover:bg-brand-700' },
+            success: { icon: 'fa-circle-check',     circle: 'bg-green-100 dark:bg-green-900/40',  iconColor: 'text-green-600',  btn: 'bg-green-600 hover:bg-green-700' },
+            warning: { icon: 'fa-triangle-exclamation', circle: 'bg-amber-100 dark:bg-amber-900/40', iconColor: 'text-amber-600', btn: 'bg-amber-600 hover:bg-amber-700' },
+            error:   { icon: 'fa-circle-xmark',     circle: 'bg-red-100 dark:bg-red-900/40',      iconColor: 'text-red-600',    btn: 'bg-red-600 hover:bg-red-700' },
+            confirm: { icon: 'fa-circle-question',  circle: 'bg-brand-100 dark:bg-brand-900/40',  iconColor: 'text-brand-600',  btn: 'bg-red-600 hover:bg-red-700' }
+        };
+
+        function showModal(options) {
+            const { title, message, type = 'info', confirmText = 'Aceptar', cancelText = 'Cancelar', showCancel = false } = options;
+            const style = MODAL_STYLES[type] || MODAL_STYLES.info;
+
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            modalIcon.className = 'fa-solid ' + style.icon + ' text-2xl ' + style.iconColor;
+            modalIconCircle.className = 'w-14 h-14 rounded-full flex items-center justify-center ' + style.circle;
+            modalConfirmBtn.textContent = confirmText;
+            modalConfirmBtn.className = 'flex-1 max-w-[180px] py-2.5 px-4 rounded-xl text-white font-semibold text-sm transition-colors shadow-lg ' + style.btn;
+
+            if (showCancel) {
+                modalCancelBtn.classList.remove('hidden');
+                modalCancelBtn.textContent = cancelText;
+            } else {
+                modalCancelBtn.classList.add('hidden');
+            }
+
+            appModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            modalConfirmBtn.focus();
+
+            return new Promise(resolve => { modalResolve = resolve; });
+        }
+
+        function closeModal(result) {
+            appModal.classList.add('hidden');
+            document.body.style.overflow = '';
+            if (modalResolve) {
+                const resolve = modalResolve;
+                modalResolve = null;
+                resolve(result);
+            }
+        }
+
+        function showAlert(title, message, type = 'info') {
+            return showModal({ title, message, type, confirmText: 'Aceptar' });
+        }
+
+        function showConfirm(title, message, confirmText = 'Eliminar', cancelText = 'Cancelar') {
+            return showModal({ title, message, type: 'confirm', confirmText, cancelText, showCancel: true });
+        }
+
+        modalConfirmBtn.addEventListener('click', () => closeModal(true));
+        modalCancelBtn.addEventListener('click', () => closeModal(false));
+        modalBackdrop.addEventListener('click', () => closeModal(false));
+        document.addEventListener('keydown', (e) => {
+            if (!appModal.classList.contains('hidden')) {
+                if (e.key === 'Escape') closeModal(false);
+                if (e.key === 'Enter') closeModal(true);
+            }
+        });
+
+        function lerpColor(c1, c2, t) {
+            const parse = hex => {
+                const h = hex.replace('#', '');
+                return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+            };
+            const [r1, g1, b1] = parse(c1);
+            const [r2, g2, b2] = parse(c2);
+            const r = Math.round(r1 + (r2 - r1) * t);
+            const g = Math.round(g1 + (g2 - g1) * t);
+            const b = Math.round(b1 + (b2 - b1) * t);
+            return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+        }
+
+        function getBionicColors() {
+            const intensity = AppState.boldIntensity / 100;
+            const clarity = AppState.lightClarity / 100;
+            const theme = AppState.theme;
+
+            let boldColor, lightColor;
+
+            if (theme === 'dark') {
+                boldColor = lerpColor('#64748b', '#ffffff', intensity);
+                lightColor = lerpColor('#94a3b8', '#2d3748', clarity);
+            } else if (theme === 'cream') {
+                boldColor = lerpColor('#6b5b45', '#000000', intensity);
+                lightColor = lerpColor('#8a7a62', '#f0ebe0', clarity);
+            } else {
+                boldColor = lerpColor('#6b7280', '#000000', intensity);
+                lightColor = lerpColor('#6b7280', '#f2f2f2', clarity);
+            }
+
+            return { boldColor, lightColor };
+        }
+
+        function applyBionicContrast() {
+            const { boldColor, lightColor } = getBionicColors();
+
+            bionicOutputPane.querySelectorAll('.bionic-bold').forEach(el => {
+                el.style.color = boldColor;
+            });
+            bionicOutputPane.querySelectorAll('.bionic-light').forEach(el => {
+                el.style.color = lightColor;
+            });
+
+            if (contrastPreview) {
+                contrastPreview.querySelectorAll('.preview-bold').forEach(el => {
+                    el.style.color = boldColor;
+                });
+                contrastPreview.querySelectorAll('.preview-light').forEach(el => {
+                    el.style.color = lightColor;
+                });
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function getFileExtension(name) {
+            const parts = name.split('.');
+            return parts.length > 1 ? parts.pop().toLowerCase() : '';
+        }
+
+        function getFileIcon(file) {
+            const ext = getFileExtension(file.name);
+            if (file.type.startsWith('image/')) return 'fa-file-image';
+            if (ext === 'pdf') return 'fa-file-pdf';
+            if (ext === 'docx' || ext === 'doc') return 'fa-file-word';
+            if (['txt', 'md', 'markdown'].includes(ext)) return 'fa-file-lines';
+            if (['html', 'htm'].includes(ext)) return 'fa-file-code';
+            return 'fa-file';
+        }
+
+        function setUploadProgress(percent, label, detail, stage) {
+            const p = Math.min(100, Math.max(0, Math.round(percent)));
+            progressBar.style.width = p + '%';
+            uploadStatusPercent.textContent = p + '%';
+            if (label) uploadStatusLabel.textContent = label;
+            if (detail) uploadStatusDetail.textContent = detail;
+            overlayProgressBar.style.width = p + '%';
+            overlayProgressText.textContent = p + '%';
+            if (stage === 'upload') {
+                uploadStatusIcon.className = 'fa-solid fa-cloud-arrow-up text-brand-400 upload-pulse';
+            } else if (stage === 'process') {
+                uploadStatusIcon.className = 'fa-solid fa-circle-notch fa-spin text-brand-400';
+            } else if (stage === 'done') {
+                uploadStatusIcon.className = 'fa-solid fa-circle-check text-green-400';
+            } else if (stage === 'error') {
+                uploadStatusIcon.className = 'fa-solid fa-circle-xmark text-red-400';
+            }
+        }
+
+        function showUploadStatus() {
+            uploadStatusCard.classList.remove('hidden');
+        }
+
+        function resetUploadUI() {
+            uploadStatusCard.classList.add('hidden');
+            processFileBtn.classList.add('hidden');
+            dropZoneIdle.classList.remove('hidden');
+            dropZoneFile.classList.add('hidden');
+            setUploadProgress(0, '', '', null);
+            filePicker.value = '';
+            AppState.pendingFile = null;
+        }
+
+        function selectFile(file) {
+            if (!file || AppState.isProcessing) return;
+            AppState.pendingFile = file;
+            dropZoneIdle.classList.add('hidden');
+            dropZoneFile.classList.remove('hidden');
+            selectedFileName.textContent = file.name;
+            selectedFileSize.textContent = formatFileSize(file.size) + ' • ' + (file.type || 'tipo desconocido');
+            fileTypeIcon.className = 'fa-solid ' + getFileIcon(file) + ' text-3xl text-brand-400 mb-2';
+            processFileBtn.classList.remove('hidden');
+            showUploadStatus();
+            setUploadProgress(100, 'Archivo listo', 'Pulsa "Procesar Archivo Seleccionado" o se procesará automáticamente', 'upload');
+            processUploadedFile(file);
+        }
+
+        function applyBionicFormatting(text, fixationRatio) {
+            if (!text) return '<p class="text-slate-400 text-center py-12">No hay texto cargado en la plataforma.</p>';
+
+            const { boldColor, lightColor } = getBionicColors();
+            const paragraphs = text.split(/\n+/);
+
+            return paragraphs.map(para => {
+                if (!para.trim()) return '';
+
+                const tokens = para.split(/([a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ]+)/u);
+
+                const formattedTokens = tokens.map((token, idx) => {
+                    if (idx % 2 === 0) return token;
+                    if (token.length === 0) return token;
+
+                    let boldCount = Math.ceil(token.length * fixationRatio);
+                    if (token.length === 1) boldCount = 1;
+
+                    const boldPart = token.substring(0, boldCount);
+                    const normalPart = token.substring(boldCount);
+
+                    const lightSpan = normalPart
+                        ? `<span class="bionic-light" style="color:${lightColor}">${normalPart}</span>`
+                        : '';
+                    return `<strong class="bionic-bold" style="color:${boldColor}">${boldPart}</strong>${lightSpan}`;
+                });
+
+                return `<p class="bionic-paragraph mb-4" style="color:${lightColor}">${formattedTokens.join('')}</p>`;
+            }).join('');
+        }
+
+        function refreshBionicContrast() {
+            applyBionicContrast();
+            saveSettings();
+        }
+
+        function saveSettings() {
+            const settings = {
+                fixationRatio: AppState.fixationRatio,
+                boldIntensity: AppState.boldIntensity,
+                lightClarity: AppState.lightClarity,
+                fontSize: AppState.fontSize,
+                lineHeight: AppState.lineHeight,
+                wordSpacing: AppState.wordSpacing,
+                fontFamily: AppState.fontFamily,
+                theme: AppState.theme
+            };
+            localStorage.setItem('br_settings', JSON.stringify(settings));
+            flashSyncStatus();
+        }
+
+        function loadSettings() {
+            const raw = localStorage.getItem('br_settings');
+            if (!raw) return;
+            try {
+                const s = JSON.parse(raw);
+                if (s.fixationRatio != null) { AppState.fixationRatio = s.fixationRatio; paramFixation.value = Math.round(s.fixationRatio * 100); valFixation.textContent = paramFixation.value + '%'; }
+                if (s.boldIntensity != null) { AppState.boldIntensity = s.boldIntensity; paramBoldIntensity.value = s.boldIntensity; valBoldIntensity.textContent = s.boldIntensity + '%'; }
+                if (s.lightClarity != null) { AppState.lightClarity = s.lightClarity; paramLightClarity.value = s.lightClarity; valLightClarity.textContent = s.lightClarity + '%'; }
+                if (s.fontSize != null) { AppState.fontSize = s.fontSize; paramFontSize.value = s.fontSize; valFontSize.textContent = s.fontSize + 'px'; }
+                if (s.lineHeight != null) { AppState.lineHeight = s.lineHeight; paramLineHeight.value = s.lineHeight; valLineHeight.textContent = s.lineHeight; }
+                if (s.wordSpacing != null) { AppState.wordSpacing = s.wordSpacing; paramWordSpacing.value = s.wordSpacing; valWordSpacing.textContent = s.wordSpacing + 'px'; }
+                if (s.fontFamily) AppState.fontFamily = s.fontFamily;
+                if (s.theme) AppState.theme = s.theme;
+            } catch (e) { console.warn('Settings load failed', e); }
+        }
+
+        function updateFontButtons() {
+            const map = { sans: fontSans, serif: fontSerif, lexend: fontLexend };
+            Object.entries(map).forEach(([key, btn]) => {
+                const active = AppState.fontFamily === key;
+                btn.classList.toggle('bg-brand-600', active);
+                btn.classList.toggle('text-white', active);
+                btn.classList.toggle('bg-slate-800', !active);
+                btn.classList.toggle('text-slate-300', !active);
+            });
+        }
+
+        function flashSyncStatus() {
+            localSyncStatus.textContent = 'Guardado ✓';
+            localSyncStatus.classList.add('text-green-400');
+            setTimeout(() => {
+                localSyncStatus.textContent = 'Sincronizado en Caché';
+                localSyncStatus.classList.remove('text-green-400');
+            }, 2000);
+        }
+
+        function updateReaderDisplay() {
+            bionicOutputPane.innerHTML = applyBionicFormatting(AppState.currentText, AppState.fixationRatio);
+            applyBionicContrast();
+            bionicOutputPane.style.fontSize = AppState.fontSize + 'px';
+            bionicOutputPane.style.lineHeight = AppState.lineHeight;
+            bionicOutputPane.style.wordSpacing = AppState.wordSpacing + 'px';
+
+            bionicOutputPane.classList.remove('font-sans', 'font-serif', 'font-lexend');
+            bionicOutputPane.classList.add('font-' + AppState.fontFamily);
+
+            currentDocTitle.textContent = AppState.currentTitle;
+            const words = AppState.currentText ? AppState.currentText.trim().split(/\s+/).filter(Boolean).length : 0;
+            wordCountEl.textContent = words;
+
+            localStorage.setItem('br_active_session', JSON.stringify({
+                text: AppState.currentText,
+                title: AppState.currentTitle
+            }));
+            flashSyncStatus();
+        }
+
+        function stripHtml(html) {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            return doc.body.textContent || '';
+        }
+
+        function stripRtf(rtf) {
+            return rtf
+                .replace(/\\par[d]?/gi, '\n')
+                .replace(/\\'[0-9a-f]{2}/gi, ' ')
+                .replace(/\\[a-z]+\d* ?/gi, '')
+                .replace(/[{}]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function isReadableText(str) {
+            if (!str || str.trim().length < 2) return false;
+            const printable = (str.match(/[\x20-\x7EáéíóúÁÉÍÓÚñÑüÜ\s]/g) || []).length;
+            return printable / str.length > 0.7;
+        }
+
+        async function readFileAsText(file) {
+            return await file.text();
+        }
+
+        async function extractFromPdf(file, onProgress) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                onProgress((i / pdf.numPages) * 80 + 10, 'Extrayendo PDF', 'Página ' + i + ' de ' + pdf.numPages);
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+            }
+            return fullText;
+        }
+
+        async function extractFromDocx(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            return result.value;
+        }
+
+        async function extractFromImage(file, onProgress) {
+            onProgress(20, 'Iniciando OCR', 'Cargando motor de reconocimiento...');
+            const worker = await Tesseract.createWorker('spa+eng', 1, {
+                logger: m => {
+                    if (m.status === 'recognizing text' && m.progress != null) {
+                        onProgress(20 + m.progress * 70, 'OCR en progreso', 'Reconociendo texto: ' + Math.round(m.progress * 100) + '%');
+                    }
+                }
+            });
+            const ret = await worker.recognize(file);
+            await worker.terminate();
+            return ret.data.text;
+        }
+
+        async function extractTextFromFile(file, onProgress) {
+            const ext = getFileExtension(file.name);
+            const mime = file.type || '';
+
+            onProgress(5, 'Subiendo archivo', 'Leyendo: ' + file.name);
+            await delay(150);
+            onProgress(15, 'Analizando formato', 'Tipo: ' + (mime || ext || 'desconocido'));
+
+            if (ext === 'pdf' || mime === 'application/pdf') {
+                return await extractFromPdf(file, onProgress);
+            }
+            if (ext === 'docx' || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                onProgress(40, 'Extrayendo Word', 'Procesando documento DOCX...');
+                return await extractFromDocx(file);
+            }
+            if (mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff', 'tif'].includes(ext)) {
+                return await extractFromImage(file, onProgress);
+            }
+            if (['html', 'htm'].includes(ext) || mime === 'text/html') {
+                onProgress(40, 'Extrayendo HTML', 'Obteniendo texto visible...');
+                return stripHtml(await readFileAsText(file));
+            }
+            if (ext === 'rtf' || mime === 'application/rtf') {
+                onProgress(40, 'Extrayendo RTF', 'Limpiando formato...');
+                return stripRtf(await readFileAsText(file));
+            }
+            if (TEXT_EXTENSIONS.has(ext) || mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml') {
+                onProgress(40, 'Leyendo texto', 'Archivo de texto plano...');
+                return await readFileAsText(file);
+            }
+
+            onProgress(30, 'Intentando lectura', 'Probando como texto plano...');
+            const asText = await readFileAsText(file);
+            if (isReadableText(asText)) return asText;
+
+            if (file.size < 15 * 1024 * 1024) {
+                onProgress(35, 'Intentando OCR', 'El archivo no es texto legible, aplicando OCR...');
+                return await extractFromImage(file, onProgress);
+            }
+
+            throw new Error('No se pudo extraer texto de este formato. Prueba PDF, Word, imagen o archivo de texto.');
+        }
+
+        function delay(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        async function processUploadedFile(file) {
+            if (!file || AppState.isProcessing) return;
+            AppState.isProcessing = true;
+            processFileBtn.disabled = true;
+            processFileBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            showUploadStatus();
+            showLoading('Iniciando', 'Preparando procesamiento...');
+            setUploadProgress(0, 'Subiendo archivo', file.name, 'upload');
+
+            try {
+                const extractedText = await extractTextFromFile(file, (percent, title, desc) => {
+                    setUploadProgress(percent, title, desc, percent < 30 ? 'upload' : 'process');
+                    showLoading(title, desc);
+                });
+
+                setUploadProgress(90, 'Aplicando lectura biónica', 'Formateando texto...', 'process');
+                showLoading('Aplicando lectura biónica', 'Formateando para lectura rápida...');
+                await delay(200);
+
+                if (!extractedText || !extractedText.trim()) {
+                    throw new Error('No se encontró texto legible en el archivo.');
+                }
+
+                AppState.currentText = extractedText.trim();
+                AppState.currentTitle = file.name.replace(/\.[^/.]+$/, '');
+                updateReaderDisplay();
+                saveDocumentToLibrary(file.name, AppState.currentText);
+                readerScrollContainer.scrollTop = 0;
+
+                setUploadProgress(100, '¡Completado!', AppState.currentTitle + ' listo para leer', 'done');
+                showLoading('¡Listo!', 'Documento procesado correctamente');
+                await delay(600);
+
+            } catch (err) {
+                console.error(err);
+                setUploadProgress(0, 'Error al procesar', err.message, 'error');
+                await showAlert('Error al procesar', err.message, 'error');
+            } finally {
+                hideLoading();
+                AppState.isProcessing = false;
+                processFileBtn.disabled = false;
+                processFileBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                setTimeout(resetUploadUI, 3000);
+            }
+        }
+
+        function saveDocumentToLibrary(title, text) {
+            const existing = AppState.library.findIndex(doc => doc.title === title);
+            const newDoc = {
+                id: existing >= 0 ? AppState.library[existing].id : Date.now(),
+                title: title,
+                text: text,
+                timestamp: new Date().toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })
+            };
+            if (existing >= 0) AppState.library[existing] = newDoc;
+            else AppState.library.unshift(newDoc);
+            if (AppState.library.length > 50) AppState.library = AppState.library.slice(0, 50);
+            localStorage.setItem('br_library_cache', JSON.stringify(AppState.library));
+            renderLibrary();
+        }
+
+        function renderLibrary() {
+            libraryList.innerHTML = '';
+            if (AppState.library.length === 0) {
+                libraryList.innerHTML = '<p class="text-xs text-slate-500 text-center py-4">No tienes documentos guardados.</p>';
+                return;
+            }
+
+            AppState.library.forEach(doc => {
+                const docDiv = document.createElement('div');
+                docDiv.className = 'p-3 bg-slate-800 hover:bg-slate-700/80 rounded-xl transition-all cursor-pointer flex items-center justify-between group';
+                docDiv.innerHTML = `
+                    <div class="flex-1 min-w-0 pr-2">
+                        <h4 class="text-sm font-medium text-slate-200 truncate">${escapeHtml(doc.title)}</h4>
+                        <p class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(doc.timestamp)}</p>
+                    </div>
+                    <button class="delete-doc-btn text-slate-500 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity" data-id="${doc.id}">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                `;
+                docDiv.addEventListener('click', (e) => {
+                    if (e.target.closest('.delete-doc-btn')) return;
+                    AppState.currentText = doc.text;
+                    AppState.currentTitle = doc.title;
+                    updateReaderDisplay();
+                    readerScrollContainer.scrollTop = 0;
+                });
+                libraryList.appendChild(docDiv);
+            });
+
+            document.querySelectorAll('.delete-doc-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = parseInt(btn.getAttribute('data-id'));
+                    AppState.library = AppState.library.filter(doc => doc.id !== id);
+                    localStorage.setItem('br_library_cache', JSON.stringify(AppState.library));
+                    renderLibrary();
+                    flashSyncStatus();
+                });
+            });
+        }
+
+        function escapeHtml(str) {
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
+        function applyTheme(themeName) {
+            AppState.theme = themeName;
+            localStorage.setItem('br_theme_pref', themeName);
+            saveSettings();
+
+            const html = document.documentElement;
+            const body = document.body;
+            html.classList.remove('dark', 'light');
+            body.classList.remove('theme-cream');
+
+            const elementsToTheme = document.querySelectorAll('header, footer');
+            elementsToTheme.forEach(el => el.classList.remove('bg-white', 'bg-slate-900', 'bg-[#fdfbf7]', 'border-slate-200', 'border-slate-800', 'border-[#efe9d9]'));
+
+            document.querySelectorAll('#theme-selectors button').forEach(btn => btn.classList.remove('ring-2', 'ring-brand-500'));
+            document.querySelector('#theme-selectors button[data-theme="' + themeName + '"]').classList.add('ring-2', 'ring-brand-500');
+
+            if (themeName === 'dark') {
+                html.classList.add('dark');
+                elementsToTheme.forEach(el => el.classList.add('bg-slate-900', 'border-slate-800'));
+            } else if (themeName === 'cream') {
+                html.classList.add('light');
+                body.classList.add('theme-cream');
+                elementsToTheme.forEach(el => el.classList.add('bg-[#fdfbf7]', 'border-[#efe9d9]'));
+            } else {
+                html.classList.add('light');
+                elementsToTheme.forEach(el => el.classList.add('bg-white', 'border-slate-200'));
+            }
+            applyBionicContrast();
+            if (AppState.currentText) {
+                bionicOutputPane.innerHTML = applyBionicFormatting(AppState.currentText, AppState.fixationRatio);
+                applyBionicContrast();
+            } else if (contrastPreview) {
+                applyBionicContrast();
+            }
+        }
+
+        function switchTab(activeTab) {
+            [tabUpload, tabConfig, tabLibrary].forEach(t => {
+                t.classList.remove('border-brand-500', 'text-white');
+                t.classList.add('border-transparent', 'text-slate-400');
+            });
+            [panelUpload, panelConfig, panelLibrary].forEach(p => p.classList.add('hidden'));
+
+            if (activeTab === 'upload') {
+                tabUpload.classList.add('border-brand-500', 'text-white');
+                panelUpload.classList.remove('hidden');
+            } else if (activeTab === 'config') {
+                tabConfig.classList.add('border-brand-500', 'text-white');
+                panelConfig.classList.remove('hidden');
+            } else if (activeTab === 'library') {
+                tabLibrary.classList.add('border-brand-500', 'text-white');
+                panelLibrary.classList.remove('hidden');
+            }
+        }
+
+        function showLoading(title, desc) {
+            loadingStatusTitle.textContent = title;
+            loadingStatusDesc.textContent = desc;
+            loadingOverlay.classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            loadingOverlay.classList.add('hidden');
+        }
+
+        function initListeners() {
+            toggleSidebarBtn.addEventListener('click', () => sidebar.classList.toggle('-translate-x-full'));
+            closeSidebarBtn.addEventListener('click', () => sidebar.classList.add('-translate-x-full'));
+
+            zenModeBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('md:w-0');
+                sidebar.classList.toggle('md:opacity-0');
+                sidebar.classList.toggle('-translate-x-full');
+                const isZen = sidebar.classList.contains('-translate-x-full');
+                zenModeBtn.innerHTML = isZen ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>';
+            });
+
+            tabUpload.addEventListener('click', () => switchTab('upload'));
+            tabConfig.addEventListener('click', () => switchTab('config'));
+            tabLibrary.addEventListener('click', () => switchTab('library'));
+
+            filePicker.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) selectFile(e.target.files[0]);
+            });
+
+            processFileBtn.addEventListener('click', () => {
+                if (AppState.pendingFile) processUploadedFile(AppState.pendingFile);
+            });
+
+            ['dragenter', 'dragover'].forEach(evt => {
+                dropZone.addEventListener(evt, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.add('drag-over');
+                });
+            });
+
+            ['dragleave', 'drop'].forEach(evt => {
+                dropZone.addEventListener(evt, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.remove('drag-over');
+                });
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                const files = e.dataTransfer.files;
+                if (files.length > 0) selectFile(files[0]);
+            });
+
+            processBtn.addEventListener('click', () => {
+                const text = manualTextInput.value.trim();
+                if (text) {
+                    AppState.currentText = text;
+                    AppState.currentTitle = 'Texto Manual';
+                    updateReaderDisplay();
+                    saveDocumentToLibrary(AppState.currentTitle, text);
+                    manualTextInput.value = '';
+                    readerScrollContainer.scrollTop = 0;
+                } else {
+                    showAlert('Texto vacío', 'Por favor inserta algún texto antes de procesar.', 'warning');
+                }
+            });
+
+            paramFixation.addEventListener('input', (e) => {
+                valFixation.textContent = e.target.value + '%';
+                AppState.fixationRatio = e.target.value / 100;
+                updateReaderDisplay();
+                saveSettings();
+            });
+
+            paramBoldIntensity.addEventListener('input', (e) => {
+                AppState.boldIntensity = parseInt(e.target.value, 10);
+                valBoldIntensity.textContent = AppState.boldIntensity + '%';
+                bionicOutputPane.innerHTML = applyBionicFormatting(AppState.currentText, AppState.fixationRatio);
+                refreshBionicContrast();
+            });
+
+            paramLightClarity.addEventListener('input', (e) => {
+                AppState.lightClarity = parseInt(e.target.value, 10);
+                valLightClarity.textContent = AppState.lightClarity + '%';
+                bionicOutputPane.innerHTML = applyBionicFormatting(AppState.currentText, AppState.fixationRatio);
+                refreshBionicContrast();
+            });
+
+            paramFontSize.addEventListener('input', (e) => {
+                valFontSize.textContent = e.target.value + 'px';
+                AppState.fontSize = parseInt(e.target.value);
+                updateReaderDisplay();
+                saveSettings();
+            });
+
+            paramLineHeight.addEventListener('input', (e) => {
+                valLineHeight.textContent = e.target.value;
+                AppState.lineHeight = parseFloat(e.target.value);
+                updateReaderDisplay();
+                saveSettings();
+            });
+
+            paramWordSpacing.addEventListener('input', (e) => {
+                valWordSpacing.textContent = e.target.value + 'px';
+                AppState.wordSpacing = parseInt(e.target.value);
+                updateReaderDisplay();
+                saveSettings();
+            });
+
+            [fontSans, fontSerif, fontLexend].forEach(btn => {
+                btn.addEventListener('click', () => {
+                    AppState.fontFamily = btn.id.replace('font-', '');
+                    updateFontButtons();
+                    updateReaderDisplay();
+                    saveSettings();
+                });
+            });
+
+            document.querySelectorAll('#theme-selectors button').forEach(btn => {
+                btn.addEventListener('click', () => applyTheme(btn.getAttribute('data-theme')));
+            });
+
+            clearCacheBtn.addEventListener('click', async () => {
+                const ok = await showConfirm(
+                    '¿Eliminar biblioteca?',
+                    'Se borrarán todos los documentos guardados localmente en tu navegador. Esta acción no se puede deshacer.',
+                    'Eliminar todo',
+                    'Cancelar'
+                );
+                if (ok) {
+                    AppState.library = [];
+                    localStorage.removeItem('br_library_cache');
+                    renderLibrary();
+                    flashSyncStatus();
+                    showAlert('Biblioteca limpiada', 'Todos los documentos locales han sido eliminados.', 'success');
+                }
+            });
+
+            saveCurrentBtn.addEventListener('click', async () => {
+                if (AppState.currentText) {
+                    saveDocumentToLibrary(AppState.currentTitle, AppState.currentText);
+                    await showAlert('Documento guardado', 'Tu lectura se guardó correctamente en la biblioteca local.', 'success');
+                }
+            });
+
+            readerScrollContainer.addEventListener('scroll', () => {
+                const totalHeight = readerScrollContainer.scrollHeight - readerScrollContainer.clientHeight;
+                readingProgressEl.textContent = totalHeight > 0
+                    ? Math.round((readerScrollContainer.scrollTop / totalHeight) * 100) + '%'
+                    : '0%';
+            });
+
+            document.getElementById('scroll-to-top').addEventListener('click', () => {
+                readerScrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const cachedLibrary = localStorage.getItem('br_library_cache');
+            if (cachedLibrary) {
+                try { AppState.library = JSON.parse(cachedLibrary); } catch (e) { AppState.library = []; }
+            }
+
+            loadSettings();
+            applyTheme(localStorage.getItem('br_theme_pref') || AppState.theme);
+            updateFontButtons();
+            applyBionicContrast();
+
+            const activeSession = localStorage.getItem('br_active_session');
+            if (activeSession) {
+                try {
+                    const parsed = JSON.parse(activeSession);
+                    AppState.currentText = parsed.text || SAMPLE_TEXT;
+                    AppState.currentTitle = parsed.title || 'Guía de Inicio Rápido';
+                } catch (e) {
+                    AppState.currentText = SAMPLE_TEXT;
+                    AppState.currentTitle = 'Guía de Inicio Rápido';
+                }
+            } else {
+                AppState.currentText = SAMPLE_TEXT;
+                AppState.currentTitle = 'Guía de Inicio Rápido';
+            }
+
+            initListeners();
+            renderLibrary();
+            updateReaderDisplay();
+        });
+    </script>
+</body>
+</html>
